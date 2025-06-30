@@ -1,0 +1,4 @@
+user=node
+host=tasks.cc
+root_dir=/home/node/workspace/github.com/beenotung/tasks
+pm2_name="tasks"
