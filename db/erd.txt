@@ -151,8 +151,8 @@ project_id integer NULL FK >0- project.id
 creator_id integer FK >0- user.id
 create_time integer
 start_time integer NULL
-done_time integer NULL
-review_time integer NULL
+finish_time integer NULL
+cancel_time integer NULL
 
 
 task_member
@@ -160,6 +160,15 @@ task_member
 id integer PK
 task_id integer FK >0- task.id
 user_id integer FK >0- user.id
+
+
+task_submission
+---------------
+id integer PK
+task_id integer FK >0- task.id
+user_id integer FK >0- user.id
+submit_time integer
+review_time integer NULL
 
 
 meetup
@@ -171,7 +180,7 @@ planned_time integer
 
 
 # zoom: 1.000
-# view: (221, 1050)
+# view: (-168, 952)
 # text-bg: #6495ed
 # text-color: #000000
 # diagram-bg: #f5f5f5
@@ -195,4 +204,5 @@ planned_time integer
 # team_member (925, 1200)
 # task (464, 1445)
 # task_member (480, 1244)
+# task_submission (51, 1326)
 # meetup (930, 1445)
