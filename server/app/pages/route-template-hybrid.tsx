@@ -14,10 +14,12 @@ import { Link, Redirect } from '../components/router.js'
 import { renderError } from '../components/error.js'
 import { Content, Page } from '../components/page.js'
 import { BackToLink } from '../components/back-to-link.js'
+import { Locale, makeThrows, Title } from '../components/locale.js'
+import { env } from '../../env.js'
+import { Script } from '../components/script.js'
+import { toSlug } from '../format/slug.js'
 import { getAuthUser } from '../auth/user.js'
-import { Locale, Title } from '../components/locale.js'
-import { Button } from '../components/button.js'
-import { IonButton } from '../components/ion-button.js'
+import { proxy } from '../../../db/proxy.js'
 
 let pageTitle = <Locale en="__title__" zh_hk="__title__" zh_cn="__title__" />
 let addPageTitle = (
@@ -40,6 +42,8 @@ let page = (
   </>
 )
 
+// replace this array with proxy for database-backed persistence
+// e.g. let items = proxy.__table__
 let items = [
   { title: 'Android', slug: 'md' },
   { title: 'iOS', slug: 'ios' },
@@ -48,9 +52,9 @@ let items = [
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
   return (
-    <>
-      <Content
-        web={
+    <Content
+      web={
+        <>
           <ul>
             {mapArray(items, item => (
               <li>
@@ -58,8 +62,19 @@ function Main(attrs: {}, context: Context) {
               </li>
             ))}
           </ul>
-        }
-        ionic={
+          {user ? (
+            <Link href="/__url__/add">
+              <button>{addPageTitle}</button>
+            </Link>
+          ) : (
+            <p>
+              You can add __name__ after <Link href="/register">register</Link>.
+            </p>
+          )}
+        </>
+      }
+      ionic={
+        <>
           <ion-list>
             {mapArray(items, item => (
               <ion-item>
@@ -67,22 +82,29 @@ function Main(attrs: {}, context: Context) {
               </ion-item>
             ))}
           </ion-list>
-        }
-      />
-      {user ? (
-        <Content
-          web={<Button url="/__url__/add">{addPageTitle}</Button>}
-          ionic={<IonButton url="/__url__/add">{addPageTitle}</IonButton>}
-        />
-      ) : (
-        <p>
-          You can add __name__ after <Link href="/register">register</Link>.
-        </p>
-      )}
-    </>
+          {user ? (
+            <Link href="/__url__/add" tagName="ion-button">
+              {addPageTitle}
+            </Link>
+          ) : (
+            <p>
+              You can add __name__ after <Link href="/register">register</Link>.
+            </p>
+          )}
+        </>
+      }
+    />
   )
 }
 
+let addPageScript = Script(/* js */ `
+${toSlug}
+function updateSlugPreview() {
+  let value = addForm.slug.value || addForm.slug.placeholder
+  previewSlug.textContent = toSlug(value)
+}
+updateSlugPreview()
+`)
 let addPage_web = (
   <>
     {Style(/* css */ `
@@ -100,30 +122,57 @@ let addPage_web = (
 `)}
     <div class="field">
       <label>
-        Title*:
+        <Locale en="Title" zh_hk="標題" zh_cn="標題" />
+        *:
         <input name="title" required minlength="3" maxlength="50" />
-        <p class="hint">(3-50 characters)</p>
+        <p class="hint">
+          <Locale
+            en="(3 to 50 characters)"
+            zh_hk="(3 至 50 個字元)"
+            zh_cn="(3 至 50 个字元)"
+          />
+        </p>
       </label>
     </div>
     <div class="field">
       <label>
-        Slug*:
+        <Locale en="Short URL Code" zh_hk="短網址碼" zh_cn="短网址码" />
+        *:
         <input
           name="slug"
           required
-          placeholder="should be unique"
+          placeholder="e.g. alice-in-wonderland"
           pattern="(\w|-|\.){1,32}"
+          oninput="updateSlugPreview()"
         />
         <p class="hint">
-          (1-32 characters of: <code>a-z A-Z 0-9 - _ .</code>)
+          (
+          <Locale
+            en="1 to 32 characters of: "
+            zh_hk="1 至 32 個字元："
+            zh_cn="1 至 32 个字元："
+          />
+          <code>a-z A-Z 0-9 - _ .</code>)
+          <br />
+          <Locale
+            en="A unique part of the URL, e.g. "
+            zh_hk="網址的一部分，例如："
+            zh_cn="网址的一部分，例如："
+          />
+          <code>
+            {env.ORIGIN}/<i id="previewSlug">alice-in-wonderland</i>
+          </code>
         </p>
       </label>
     </div>
-    <input type="submit" value="Submit" />
+    <input
+      type="submit"
+      value={<Locale en="Submit" zh_hk="提交" zh_cn="提交" />}
+    />
     <p>
-      Remark:
+      <Locale en="Remark:" zh_hk="備註：" zh_cn="备注：" />
       <br />
-      *: mandatory fields
+      <Locale en="* mandatory fields" zh_hk="* 必填欄位" zh_cn="* 必填字段" />
     </p>
     <p id="add-message"></p>
   </>
@@ -140,34 +189,68 @@ let addPage_ionic = (
       <ion-item>
         <ion-input
           name="title"
-          label="Title*:"
+          label={<Locale en="Title*:" zh_hk="標題*:" zh_cn="標題*:" />}
           label-placement="floating"
           required
           minlength="3"
           maxlength="50"
         />
       </ion-item>
-      <p class="hint">(3-50 characters)</p>
+      <p class="hint">
+        <Locale
+          en="(3 to 50 characters)"
+          zh_hk="(3 至 50 個字元)"
+          zh_cn="(3 至 50 个字元)"
+        />
+      </p>
       <ion-item>
         <ion-input
           name="slug"
-          label="Slug*: (unique url)"
+          label={<Locale en="Slug*:" zh_hk="短網址碼*:" zh_cn="短网址码*:" />}
           label-placement="floating"
           required
           pattern="(\w|-|\.){1,32}"
+          oninput="updateSlugPreview()"
+          placeholder="e.g. alice-in-wonderland"
         />
       </ion-item>
       <p class="hint">
-        (1-32 characters of: <code>a-z A-Z 0-9 - _ .</code>)
+        (
+        <Locale
+          en="1 to 32 characters of: "
+          zh_hk="1 至 32 個字元："
+          zh_cn="1 至 32 个字元："
+        />
+        <code>a-z A-Z 0-9 - _ .</code>)
+        <br />
+        <Locale
+          en="A unique part of the URL, e.g. "
+          zh_hk="網址的一部分，例如："
+          zh_cn="网址的一部分，例如："
+        />
+        <code
+          style="
+            display: inline-block;
+            background-color: #eee;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #ccc;
+            margin-top: 0.25rem;
+          "
+        >
+          {env.ORIGIN}/<i id="previewSlug">alice-in-wonderland</i>
+        </code>
       </p>
     </ion-list>
     <div style="margin-inline-start: 1rem">
-      <ion-button type="submit">Submit</ion-button>
+      <ion-button type="submit">
+        <Locale en="Submit" zh_hk="提交" zh_cn="提交" />
+      </ion-button>
     </div>
     <p>
-      Remark:
+      <Locale en="Remark:" zh_hk="備註：" zh_cn="备注：" />
       <br />
-      *: mandatory fields
+      <Locale en="* mandatory fields" zh_hk="* 必填欄位" zh_cn="* 必填字段" />
     </p>
     <p id="add-message"></p>
   </>
@@ -179,9 +262,15 @@ let addPage = (
     backHref="/__url__"
     backText={pageTitle}
   >
-    <form method="POST" action="/__url__/add/submit" onsubmit="emitForm(event)">
+    <form
+      id="addForm"
+      method="POST"
+      action="/__url__/add/submit"
+      onsubmit="emitForm(event)"
+    >
       <Content web={addPage_web} ionic={addPage_ionic} />
     </form>
+    {addPageScript}
   </Page>
 )
 function AddPage(attrs: {}, context: DynamicContext) {
@@ -197,8 +286,14 @@ let submitParser = object({
 
 function Submit(attrs: {}, context: DynamicContext) {
   try {
+    let throws = makeThrows(context)
     let user = getAuthUser(context)
-    if (!user) throw 'You must be logged in to submit ' + pageTitle
+    if (!user)
+      throws({
+        en: 'You must be logged in to submit ' + Locale(pageTitle, context),
+        zh_hk: '您必須登入才能提交 ' + Locale(pageTitle, context),
+        zh_cn: '您必須登入才能提交 ' + Locale(pageTitle, context),
+      })
     let body = getContextFormBody(context)
     let input = submitParser.parse(body)
     let id = items.push({
@@ -233,7 +328,13 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
         renderError(error, context)
       ) : (
         <>
-          <p>Your submission is received (#{id}).</p>
+          <p>
+            <Locale
+              en={`Your submission is received (#${id}).`}
+              zh_hk={`你的提交已收到 (#${id})。`}
+              zh_cn={`你的提交已收到 (#${id})。`}
+            />
+          </p>
           <BackToLink href="/__url__" title={pageTitle} />
         </>
       )}
