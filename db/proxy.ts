@@ -106,6 +106,69 @@ export type ContentReport = {
   reject_time: null | number
 }
 
+export type Project = {
+  id?: null | number
+  manager_id: number
+  manager?: User
+  name: string
+}
+
+export type Team = {
+  id?: null | number
+  manager_id: number
+  manager?: User
+  name: string
+}
+
+export type TeamMember = {
+  id?: null | number
+  team_id: number
+  team?: Team
+  user_id: number
+  user?: User
+  nickname: string
+}
+
+export type Task = {
+  id?: null | number
+  title: string
+  project_id: null | number
+  project?: Project
+  creator_id: number
+  creator?: User
+  create_time: number
+  start_time: null | number
+  finish_time: null | number
+  cancel_time: null | number
+}
+
+export type TaskMember = {
+  id?: null | number
+  task_id: number
+  task?: Task
+  user_id: number
+  user?: User
+}
+
+export type TaskSubmission = {
+  id?: null | number
+  task_id: number
+  task?: Task
+  user_id: number
+  user?: User
+  submit_time: number
+  review_time: null | number
+}
+
+export type Meetup = {
+  id?: null | number
+  team_id: number
+  team?: Team
+  user_id: number
+  user?: User
+  planned_time: number
+}
+
 export type DBProxy = {
   method: Method[]
   url: Url[]
@@ -119,6 +182,13 @@ export type DBProxy = {
   verification_attempt: VerificationAttempt[]
   verification_code: VerificationCode[]
   content_report: ContentReport[]
+  project: Project[]
+  team: Team[]
+  team_member: TeamMember[]
+  task: Task[]
+  task_member: TaskMember[]
+  task_submission: TaskSubmission[]
+  meetup: Meetup[]
 }
 
 export let proxy = proxySchema<DBProxy>({
@@ -154,6 +224,39 @@ export let proxy = proxySchema<DBProxy>({
       /* foreign references */
       ['reporter', { field: 'reporter_id', table: 'user' }],
       ['reviewer', { field: 'reviewer_id', table: 'user' }],
+    ],
+    project: [
+      /* foreign references */
+      ['manager', { field: 'manager_id', table: 'user' }],
+    ],
+    team: [
+      /* foreign references */
+      ['manager', { field: 'manager_id', table: 'user' }],
+    ],
+    team_member: [
+      /* foreign references */
+      ['team', { field: 'team_id', table: 'team' }],
+      ['user', { field: 'user_id', table: 'user' }],
+    ],
+    task: [
+      /* foreign references */
+      ['project', { field: 'project_id', table: 'project' }],
+      ['creator', { field: 'creator_id', table: 'user' }],
+    ],
+    task_member: [
+      /* foreign references */
+      ['task', { field: 'task_id', table: 'task' }],
+      ['user', { field: 'user_id', table: 'user' }],
+    ],
+    task_submission: [
+      /* foreign references */
+      ['task', { field: 'task_id', table: 'task' }],
+      ['user', { field: 'user_id', table: 'user' }],
+    ],
+    meetup: [
+      /* foreign references */
+      ['team', { field: 'team_id', table: 'team' }],
+      ['user', { field: 'user_id', table: 'user' }],
     ],
   },
 })
