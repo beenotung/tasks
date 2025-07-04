@@ -113,8 +113,17 @@ export type Project = {
   name: string
 }
 
+export type Org = {
+  id?: null | number
+  name: string
+  creator_id: number
+  creator?: User
+}
+
 export type Team = {
   id?: null | number
+  org_id: number
+  org?: Org
   manager_id: number
   manager?: User
   name: string
@@ -183,6 +192,7 @@ export type DBProxy = {
   verification_code: VerificationCode[]
   content_report: ContentReport[]
   project: Project[]
+  org: Org[]
   team: Team[]
   team_member: TeamMember[]
   task: Task[]
@@ -229,8 +239,13 @@ export let proxy = proxySchema<DBProxy>({
       /* foreign references */
       ['manager', { field: 'manager_id', table: 'user' }],
     ],
+    org: [
+      /* foreign references */
+      ['creator', { field: 'creator_id', table: 'user' }],
+    ],
     team: [
       /* foreign references */
+      ['org', { field: 'org_id', table: 'org' }],
       ['manager', { field: 'manager_id', table: 'user' }],
     ],
     team_member: [
