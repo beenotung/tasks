@@ -22,6 +22,8 @@ import { getAuthUser } from '../auth/user.js'
 import { filter } from 'better-sqlite3-proxy'
 import { db } from '../../../db/db.js'
 import { getDisplayName } from './profile.js'
+import { select_org_list_by_user } from '../auth/org.js'
+import { orgUrl } from './team.js'
 
 let pageTitle = <Locale en="Org List" zh_hk="組織列表" zh_cn="组织列表" />
 let addPageTitle = <Locale en="Add Org" zh_hk="添加組織" zh_cn="添加组织" />
@@ -41,20 +43,6 @@ let page = (
     </div>
   </>
 )
-
-let select_org_list = db
-  .prepare<{ user_id: number }, number>(
-    /* sql */ `
-select
-  distinct org.id
-from org
-left join team on team.org_id = org.id
-left join team_member on team_member.team_id = team.id
-where org.creator_id = :user_id
-or team_member.user_id = :user_id
-`,
-  )
-  .pluck()
 
 function Main(attrs: {}, context: Context) {
   let user = getAuthUser(context)
@@ -82,7 +70,7 @@ function Main(attrs: {}, context: Context) {
       </div>
     )
   let user_id = user.id!
-  let org_id_list = select_org_list.all({ user_id })
+  let org_id_list = select_org_list_by_user.all({ user_id })
   return (
     <>
       {org_id_list.length === 0 && (
@@ -98,12 +86,16 @@ function Main(attrs: {}, context: Context) {
         {mapArray(org_id_list, org_id => {
           let org = proxy.org[org_id]
           let by =
-            org.creator_id == user_id
-              ? 'owner'
-              : 'by ' + getDisplayName(org.creator!)
+            org.creator_id == user_id ? (
+              <Locale en="creator" zh_hk="創建者" zh_cn="创建者" />
+            ) : (
+              <Locale en="by" zh_hk="由" zh_cn="由" /> +
+              ' ' +
+              getDisplayName(org.creator!)
+            )
           return (
             <li>
-              {org.name} ({by})
+              <Link href={orgUrl(org)}>{org.name}</Link> ({by})
             </li>
           )
         })}
