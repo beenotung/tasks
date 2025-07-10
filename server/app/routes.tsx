@@ -80,7 +80,7 @@ export type Routes = Record<string, PageRoute>
 
 // TODO direct support alternative urls instead of having to repeat the entry
 let routeDict = {
-  ...ReportContent.routes,
+  // ...ReportContent.routes,
   ...Home.routes,
   ...DemoPlugin.routes,
   ...UILanguage.routes,
