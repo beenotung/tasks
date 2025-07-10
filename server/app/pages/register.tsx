@@ -29,7 +29,7 @@ import { ClearInputContext, Field, InputContext } from '../components/field.js'
 import { loadClientPlugin } from '../../client-plugin.js'
 import { is_ionic, is_web, Page } from '../components/page.js'
 import { IonButton } from '../components/ion-button.js'
-import { Locale } from '../components/locale.js'
+import { Locale, Title } from '../components/locale.js'
 
 let style = Style(/* css */ `
 #register form .field {
@@ -63,9 +63,9 @@ let RegisterPage = (
     {style}
     <Page
       id="register"
-      title="Register"
+      title={<Title t={<Locale en="Register" zh_hk="註冊" zh_cn="注册" />} />}
       backHref="/"
-      backText="Home"
+      backText={<Locale en="Home" zh_hk="主頁" zh_cn="主页" />}
       backColor="light"
       headerColor="primary"
     >
@@ -661,12 +661,11 @@ fetch('/login/submit',{
             zh_cn="注册成功。"
           />
         </p>
-        <p hidden>
-          TODO:
+        <p>
           <Locale
             en="A verification email has already been sent to your email address. Please check your inbox and spam folder."
-            zh_hk="已經向你的電郵地址發送了驗證電郵。請檢查你的收件箱和垃圾郵件文件夾。"
-            zh_cn="已经向你的电子邮件地址发送了验证电子邮件。请检查你的收件箱和垃圾邮件文件夹。"
+            zh_hk="系統已經向你的電郵地址發送了驗證電郵。請檢查你的收件箱和垃圾郵件文件夾。"
+            zh_cn="系统已经向你的电子邮件地址发送了验证电子邮件。请检查你的收件箱和垃圾邮件文件夹。"
           />
         </p>
         {main}
