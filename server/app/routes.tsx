@@ -1,3 +1,4 @@
+import Org from './pages/org.js'
 import ReportContent from './pages/report-content.js'
 import AppNotice from './pages/app-notice.js'
 import AppChat from './pages/app-chat.js'
@@ -80,6 +81,7 @@ export type Routes = Record<string, PageRoute>
 
 // TODO direct support alternative urls instead of having to repeat the entry
 let routeDict = {
+  ...Org.routes,
   // ...ReportContent.routes,
   ...Home.routes,
   ...DemoPlugin.routes,
