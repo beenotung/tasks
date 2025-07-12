@@ -13,7 +13,12 @@ import { mapArray } from '../components/fragment.js'
 import { object, string } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
 import { renderError, showError } from '../components/error.js'
-import { Locale, makeThrows, Title } from '../components/locale.js'
+import {
+  makeTranslate,
+  Locale,
+  makeThrows,
+  Title,
+} from '../components/locale.js'
 import { Org, proxy, Team } from '../../../db/proxy.js'
 import { Script } from '../components/script.js'
 import { toSlug } from '../format/slug.js'
@@ -25,6 +30,8 @@ import { toRouteUrl } from '../../url.js'
 import { Node } from '../jsx/types.js'
 import { getDisplayName } from './profile.js'
 import { EarlyTerminate } from '../../exception.js'
+import { removeNewlines } from '../format/string.js'
+import { errorRoute } from '../api-route.js'
 
 let style = Style(/* css */ `
 #Team {
@@ -32,7 +39,7 @@ let style = Style(/* css */ `
 }
 `)
 
-function TeamListPage(
+function OrgPage(
   attrs: { org: Org; user_id: number; title: Node },
   context: DynamicContext,
 ) {
@@ -41,11 +48,55 @@ function TeamListPage(
     org_id: org.id!,
     user_id,
   })
+  let rename_url = toRouteUrl(routes, '/org/:org_slug/rename', {
+    params: {
+      org_slug: org.id + '-' + toSlug(org.name),
+    },
+  })
   return (
     <>
       {style}
-      <div id="Team">
-        <h1>{title}</h1>
+      <div id="OrgPage">
+        <h1 id="org_name">{org.name}</h1>
+        <form
+          id="rename_form"
+          method="POST"
+          action={rename_url}
+          onsubmit="emitForm(event)"
+        >
+          <button
+            id="rename_button"
+            type="button"
+            onclick={removeNewlines(`
+              rename_form_content.hidden = false;
+              rename_button.hidden = true;
+              new_org_name.selectionStart = new_org_name.value.length;
+              new_org_name.selectionEnd = new_org_name.value.length;
+              new_org_name.focus();
+            `)}
+          >
+            <Locale
+              en="Change Org Name"
+              zh_hk="更改組織名稱"
+              zh_cn="更改组织名称"
+            />
+          </button>
+          <div hidden id="rename_form_content">
+            <div style="margin-block-end: 0.5rem">
+              <input
+                value={org.name}
+                id="new_org_name"
+                name="name"
+                minlength="1"
+                maxlength="50"
+              />
+            </div>
+            <button type="submit">
+              <Locale en="Save" zh_hk="保存" zh_cn="保存" />
+            </button>
+          </div>
+        </form>
+
         {team_id_list.length === 0 && (
           <p>
             <Locale
@@ -55,6 +106,9 @@ function TeamListPage(
             />
           </p>
         )}
+        <h2>
+          <Locale en="Team List" zh_hk="團隊列表" zh_cn="团队列表" />
+        </h2>
         <ul>
           {mapArray(team_id_list, team_id => {
             let team = proxy.team[team_id]
@@ -83,7 +137,7 @@ function TeamListPage(
   )
 }
 
-let resolveTeamListPage = resolveOrg({
+let resolveOrgPage = resolveOrg({
   title: <Locale en="Team List" zh_hk="團隊列表" zh_cn="团队列表" />,
   description: (
     <Locale
@@ -118,62 +172,119 @@ let resolveTeamListPage = resolveOrg({
           zh_cn={`${org_name} 的团队列表`}
         />
       ),
-      node: <TeamListPage org={org} user_id={user_id} title={title} />,
+      node: <OrgPage org={org} user_id={user_id} title={title} />,
     }
   },
 })
 
-let teamPageScript = Script(/* js */ `
-function renameTeam(button) {
-  let url = button.dataset.url
-  emit(url, { name: new_team_name.value })
-}
-`)
+let renameOrgParser = object({
+  name: string({ minLength: 1, maxLength: 50 }),
+})
+
+let resolveRenameOrg = resolveOrg({
+  title: apiEndpointTitle,
+  description: 'change org name by creator',
+  action: (
+    <Locale
+      en="change the org name"
+      zh_hk="更改組織名稱"
+      zh_cn="更改组织名称"
+    />
+  ),
+  api: ({ org, user_id }, context: Context) => {
+    let title = apiEndpointTitle
+    let description = 'change org name by creator'
+    let ws = context.type == 'ws' ? context.ws : null
+    let translate = makeTranslate(context)
+    if (org.creator_id != user_id) {
+      let error = translate({
+        en: 'You are not the creator of this org',
+        zh_hk: '您不是這個組織的創建者',
+        zh_cn: '您不是这个组织的创建者',
+      })
+      if (ws) {
+        ws.send(showError(error))
+        throw EarlyTerminate
+      } else {
+        return errorRoute(error, context, title, description)
+      }
+    }
+    let body = getContextFormBody(context)
+    let input = renameOrgParser.parse(body)
+    org.name = input.name
+    if (ws) {
+      ws.send([
+        'eval',
+        /* javascript */ `
+rename_form_content.hidden = true
+rename_button.hidden = false
+org_name.textContent = ${JSON.stringify(input.name)}
+`,
+      ])
+      throw EarlyTerminate
+    } else {
+      return {
+        title,
+        description,
+        node: <Redirect href={orgUrl(org)} />,
+      }
+    }
+  },
+})
 
 function TeamPage(attrs: { team: Team; title: Node }, context: DynamicContext) {
   let { team, title } = attrs
   let org = team.org!
+  let rename_url = toRouteUrl(routes, '/org/:org_slug/team/:team_slug/rename', {
+    params: {
+      org_slug: org.id + '-' + toSlug(org.name),
+      team_slug: team.id + '-' + toSlug(team.name),
+    },
+  })
   return (
     <>
-      {teamPageScript}
       <div id="TeamPage">
         <h1>
           <span>{org.name}</span> - <span id="team_name">{team.name}</span>
         </h1>
-        <button
-          id="rename_button"
-          onclick="rename_form.hidden = false; rename_button.hidden = true"
+        <form
+          id="rename_form"
+          method="POST"
+          action={rename_url}
+          onsubmit="emitForm(event)"
         >
-          <Locale
-            en="Change Team Name"
-            zh_hk="更改團隊名稱"
-            zh_cn="更改团队名称"
-          />
-        </button>
-        <div hidden id="rename_form">
-          <div style="margin-block-end: 0.5rem">
-            <input value={team.name} id="new_team_name" />
-          </div>
           <button
-            onclick="renameTeam(this)"
-            data-url={toRouteUrl(
-              routes,
-              '/org/:org_slug/team/:team_slug/rename',
-              {
-                params: {
-                  org_slug: team.org!.id + '-' + toSlug(team.org!.name),
-                  team_slug: team.id + '-' + toSlug(team.name),
-                },
-              },
-            )}
+            id="rename_button"
+            type="button"
+            onclick={removeNewlines(`
+              rename_form_content.hidden = false;
+              rename_button.hidden = true;
+              new_team_name.selectionStart = new_team_name.value.length;
+              new_team_name.selectionEnd = new_team_name.value.length;
+              new_team_name.focus();
+            `)}
           >
             <Locale
-              en="Save new team name"
-              zh_hk="保存新的團隊名稱"
-              zh_cn="保存新的团队名称"
+              en="Change Team Name"
+              zh_hk="更改團隊名稱"
+              zh_cn="更改团队名称"
             />
           </button>
-        </div>
+          <div hidden id="rename_form_content">
+            <div style="margin-block-end: 0.5rem">
+              <input
+                value={team.name}
+                id="new_team_name"
+                name="name"
+                minlength="1"
+                maxlength="50"
+              />
+            </div>
+            <button type="submit">
+              <Locale en="Save" zh_hk="保存" zh_cn="保存" />
+            </button>
+          </div>
+        </form>
       </div>
     </>
   )
@@ -228,28 +339,43 @@ let resolveRenameTeam = resolveTeam({
     />
   ),
   api: ({ team, user_id }, context: Context) => {
-    let ws = (context as WsContext).ws
+    let title = apiEndpointTitle
+    let description = 'change team name by manager'
+    let ws = context.type == 'ws' ? context.ws : null
+    let translate = makeTranslate(context)
     if (team.manager_id != user_id) {
-      ws.send(
-        showError({
-          en: 'You are not the manager of this team',
-          zh_hk: '您不是這個團隊的管理員',
-          zh_cn: '您不是这个团队的管理员',
-        }),
-      )
+      let error = translate({
+        en: 'You are not the manager of this team',
+        zh_hk: '您不是這個團隊的管理員',
+        zh_cn: '您不是这个团队的管理员',
+      })
+      if (ws) {
+        ws.send(showError(error))
+        throw EarlyTerminate
+      } else {
+        return errorRoute(error, context, title, description)
+      }
     }
     let body = getContextFormBody(context)
     let input = renameTeamParser.parse(body)
     team.name = input.name
-    ws.send([
-      'eval',
-      /* javascript */ `
-rename_form.hidden = true
+    if (ws) {
+      ws.send([
+        'eval',
+        /* javascript */ `
+rename_form_content.hidden = true
 rename_button.hidden = false
 team_name.textContent = ${JSON.stringify(input.name)}
 `,
-    ])
-    throw EarlyTerminate
+      ])
+      throw EarlyTerminate
+    } else {
+      return {
+        title,
+        description,
+        node: <Redirect href={teamUrl(team)} />,
+      }
+    }
   },
 })
 
@@ -599,7 +725,10 @@ function resolveTeam(options: {
 
 let routes = {
   '/org/:org_slug/team': {
-    resolve: resolveTeamListPage,
+    resolve: resolveOrgPage,
+  },
+  '/org/:org_slug/rename': {
+    resolve: resolveRenameOrg,
   },
   '/org/:org_slug/team/add': {
     streaming: false,
