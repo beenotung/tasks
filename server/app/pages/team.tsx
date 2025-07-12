@@ -266,46 +266,15 @@ function AddPage(attrs: { org: Org; title: Node }, context: DynamicContext) {
         >
           <div class="field">
             <label>
-              <Locale en="Title" zh_hk="標題" zh_cn="標題" />
+              <Locale en="Team Name" zh_hk="團隊名稱" zh_cn="团队名称" />
               *:
-              <input name="title" required minlength="3" maxlength="50" />
+              <input name="name" required minlength="1" maxlength="50" />
               <p class="hint">
                 <Locale
-                  en="(3 to 50 characters)"
-                  zh_hk="(3 至 50 個字元)"
-                  zh_cn="(3 至 50 个字元)"
+                  en="(1 to 50 characters)"
+                  zh_hk="(1 至 50 個字元)"
+                  zh_cn="(1 至 50 个字元)"
                 />
-              </p>
-            </label>
-          </div>
-          <div class="field">
-            <label>
-              <Locale en="Short URL Code" zh_hk="短網址碼" zh_cn="短网址码" />
-              *:
-              <input
-                name="slug"
-                required
-                placeholder="e.g. alice-in-wonderland"
-                pattern="(\w|-|\.){1,32}"
-                oninput="updateSlugPreview()"
-              />
-              <p class="hint">
-                (
-                <Locale
-                  en="1 to 32 characters of: "
-                  zh_hk="1 至 32 個字元："
-                  zh_cn="1 至 32 个字元："
-                />
-                <code>a-z A-Z 0-9 - _ .</code>)
-                <br />
-                <Locale
-                  en="A unique part of the URL, e.g. "
-                  zh_hk="網址的一部分，例如："
-                  zh_cn="网址的一部分，例如："
-                />
-                <code>
-                  {env.ORIGIN}/<i id="previewSlug">alice-in-wonderland</i>
-                </code>
               </p>
             </label>
           </div>
@@ -331,7 +300,7 @@ function AddPage(attrs: { org: Org; title: Node }, context: DynamicContext) {
 }
 
 let submitParser = object({
-  name: string({ minLength: 3, maxLength: 50 }),
+  name: string({ minLength: 1, maxLength: 50 }),
 })
 
 function Submit(attrs: {}, context: DynamicContext) {
