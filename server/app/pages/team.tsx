@@ -32,6 +32,7 @@ import { getDisplayName } from './profile.js'
 import { EarlyTerminate } from '../../exception.js'
 import { removeNewlines } from '../format/string.js'
 import { errorRoute } from '../api-route.js'
+import { filter } from 'better-sqlite3-proxy'
 
 let style = Style(/* css */ `
 #Team {
@@ -58,43 +59,41 @@ function OrgPage(
       {style}
       <div id="OrgPage">
         <h1 id="org_name">{org.name}</h1>
-        <form
-          id="rename_form"
-          method="POST"
-          action={rename_url}
-          onsubmit="emitForm(event)"
-        >
-          <button
-            id="rename_button"
-            type="button"
-            onclick={removeNewlines(`
-              rename_form_content.hidden = false;
+        <button
+          id="rename_button"
+          onclick={removeNewlines(`
+              rename_form.hidden = false;
               rename_button.hidden = true;
               new_org_name.selectionStart = new_org_name.value.length;
               new_org_name.selectionEnd = new_org_name.value.length;
               new_org_name.focus();
             `)}
-          >
-            <Locale
-              en="Change Org Name"
-              zh_hk="更改組織名稱"
-              zh_cn="更改组织名称"
+        >
+          <Locale
+            en="Change Org Name"
+            zh_hk="更改組織名稱"
+            zh_cn="更改组织名称"
+          />
+        </button>
+        <form
+          id="rename_form"
+          method="POST"
+          action={rename_url}
+          onsubmit="emitForm(event)"
+          hidden
+        >
+          <div style="margin-block-end: 0.5rem">
+            <input
+              value={org.name}
+              id="new_org_name"
+              name="name"
+              minlength="1"
+              maxlength="50"
             />
-          </button>
-          <div hidden id="rename_form_content">
-            <div style="margin-block-end: 0.5rem">
-              <input
-                value={org.name}
-                id="new_org_name"
-                name="name"
-                minlength="1"
-                maxlength="50"
-              />
-            </div>
-            <button type="submit">
-              <Locale en="Save" zh_hk="保存" zh_cn="保存" />
-            </button>
           </div>
+          <button type="submit">
+            <Locale en="Save" zh_hk="保存" zh_cn="保存" />
+          </button>
         </form>
 
         {team_id_list.length === 0 && (
@@ -216,7 +215,7 @@ let resolveRenameOrg = resolveOrg({
       ws.send([
         'eval',
         /* javascript */ `
-rename_form_content.hidden = true
+rename_form.hidden = true
 rename_button.hidden = false
 org_name.textContent = ${JSON.stringify(input.name)}
 `,
@@ -241,49 +240,79 @@ function TeamPage(attrs: { team: Team; title: Node }, context: DynamicContext) {
       team_slug: team.id + '-' + toSlug(team.name),
     },
   })
+  let members = filter(proxy.team_member, { team_id: team.id! })
   return (
     <>
       <div id="TeamPage">
         <h1>
           <span>{org.name}</span> - <span id="team_name">{team.name}</span>
         </h1>
-        <form
-          id="rename_form"
-          method="POST"
-          action={rename_url}
-          onsubmit="emitForm(event)"
-        >
-          <button
-            id="rename_button"
-            type="button"
-            onclick={removeNewlines(`
-              rename_form_content.hidden = false;
+        <button
+          id="rename_button"
+          onclick={removeNewlines(`
+              rename_form.hidden = false;
               rename_button.hidden = true;
               new_team_name.selectionStart = new_team_name.value.length;
               new_team_name.selectionEnd = new_team_name.value.length;
               new_team_name.focus();
             `)}
-          >
-            <Locale
-              en="Change Team Name"
-              zh_hk="更改團隊名稱"
-              zh_cn="更改团队名称"
+        >
+          <Locale
+            en="Change Team Name"
+            zh_hk="更改團隊名稱"
+            zh_cn="更改团队名称"
+          />
+        </button>
+        <form
+          id="rename_form"
+          method="POST"
+          action={rename_url}
+          onsubmit="emitForm(event)"
+          hidden
+        >
+          <div style="margin-block-end: 0.5rem">
+            <input
+              value={team.name}
+              id="new_team_name"
+              name="name"
+              minlength="1"
+              maxlength="50"
             />
-          </button>
-          <div hidden id="rename_form_content">
-            <div style="margin-block-end: 0.5rem">
-              <input
-                value={team.name}
-                id="new_team_name"
-                name="name"
-                minlength="1"
-                maxlength="50"
-              />
-            </div>
-            <button type="submit">
-              <Locale en="Save" zh_hk="保存" zh_cn="保存" />
-            </button>
           </div>
+          <button type="submit">
+            <Locale en="Save" zh_hk="保存" zh_cn="保存" />
+          </button>
+        </form>
+        <h2>
+          <Locale en="Team Members" zh_hk="團隊成員" zh_cn="团队成员" />
+        </h2>
+        {members.length === 0 && (
+          <p>
+            <Locale
+              en="No team members"
+              zh_hk="沒有團隊成員"
+              zh_cn="没有团队成员"
+            />
+          </p>
+        )}
+        <ul>
+          {mapArray(members, member => {
+            let user = member.user!
+            return <li>{getDisplayName(user)}</li>
+          })}
+        </ul>
+        <button>
+          <Locale en="Add Member" zh_hk="添加成員" zh_cn="添加成员" />
+        </button>
+        <form
+          id="add_member_form"
+          method="POST"
+          action={addMemberSubmitUrl(team)}
+        >
+          <input type="text" name="user_id" />
+          <button type="submit">
+            <Locale en="Add" zh_hk="添加" zh_cn="添加" />
+          </button>
         </form>
       </div>
     </>
@@ -363,7 +392,7 @@ let resolveRenameTeam = resolveTeam({
       ws.send([
         'eval',
         /* javascript */ `
-rename_form_content.hidden = true
+rename_form.hidden = true
 rename_button.hidden = false
 team_name.textContent = ${JSON.stringify(input.name)}
 `,
@@ -379,7 +408,7 @@ team_name.textContent = ${JSON.stringify(input.name)}
   },
 })
 
-let addPageStyle = Style(/* css */ `
+let addTeamStyle = Style(/* css */ `
 #AddTeam .field {
   margin-block-end: 1rem;
 }
@@ -392,7 +421,7 @@ let addPageStyle = Style(/* css */ `
   margin-block-start: 0.25rem;
 }
 `)
-let addPageScript = Script(/* js */ `
+let addTeamScript = Script(/* js */ `
 ${toSlug}
 function updateSlugPreview() {
   let value = addForm.slug.value || addForm.slug.placeholder
@@ -466,17 +495,20 @@ function resolveAddTeamPage(context: DynamicContext): ResolvedPageRoute {
   return {
     title: <Title t={title} />,
     description: title,
-    node: <AddPage org={org} title={title} />,
+    node: <AddTeamPage org={org} title={title} />,
   }
 }
 
-function AddPage(attrs: { org: Org; title: Node }, context: DynamicContext) {
+function AddTeamPage(
+  attrs: { org: Org; title: Node },
+  context: DynamicContext,
+) {
   let { org, title } = attrs
   let user = getAuthUser(context)
   if (!user) return <Redirect href="/login" />
   return (
     <>
-      {addPageStyle}
+      {addTeamStyle}
       <div id="AddTeam">
         <h1>{title}</h1>
         <form
@@ -515,16 +547,16 @@ function AddPage(attrs: { org: Org; title: Node }, context: DynamicContext) {
           <p id="add-message"></p>
         </form>
       </div>
-      {addPageScript}
+      {addTeamScript}
     </>
   )
 }
 
-let submitParser = object({
+let addTeamSubmitParser = object({
   name: string({ minLength: 1, maxLength: 50 }),
 })
 
-function Submit(attrs: {}, context: DynamicContext) {
+function AddTeamSubmit(attrs: {}, context: DynamicContext) {
   let org_slug = context.routerMatch?.params.org_slug
   try {
     let throws = makeThrows(context)
@@ -538,7 +570,7 @@ function Submit(attrs: {}, context: DynamicContext) {
     let org_id = parseInt(context.routerMatch?.params.org_slug)
     let org = proxy.org[org_id]
     let body = getContextFormBody(context)
-    let input = submitParser.parse(body)
+    let input = addTeamSubmitParser.parse(body)
     let id = proxy.team.push({
       org_id: org.id!,
       manager_id: user.id!,
@@ -565,7 +597,7 @@ function Submit(attrs: {}, context: DynamicContext) {
   }
 }
 
-function SubmitResult(attrs: {}, context: DynamicContext) {
+function AddTeamSubmitResult(attrs: {}, context: DynamicContext) {
   let params = new URLSearchParams(context.routerMatch?.search)
   let error = params.get('error')
   let id = +params.get('id')!
@@ -593,6 +625,8 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
     </div>
   )
 }
+
+function AddTeamMemberSubmit(attrs: {}, context: DynamicContext) {}
 
 function resolveOrg(options: {
   title: string
@@ -737,13 +771,13 @@ let routes = {
   '/org/:org_slug/team/add/submit': {
     title: apiEndpointTitle,
     description: 'create a new team under the specified org',
-    node: <Submit />,
+    node: <AddTeamSubmit />,
     streaming: false,
   },
   '/org/:org_slug/team/add/result': {
     title: apiEndpointTitle,
     description: 'result of creating a new team',
-    node: <SubmitResult />,
+    node: <AddTeamSubmitResult />,
     streaming: false,
   },
   '/org/:org_slug/team/:team_slug': {
@@ -751,6 +785,12 @@ let routes = {
   },
   '/org/:org_slug/team/:team_slug/rename': {
     resolve: resolveRenameTeam,
+  },
+  '/org/:org_slug/team/:team_slug/members/add/submit': {
+    title: apiEndpointTitle,
+    description: 'add a member to a team',
+    node: <AddTeamMemberSubmit />,
+    streaming: false,
   },
 } satisfies Routes
 
@@ -786,6 +826,19 @@ export function teamUrl(team: Team) {
       team_slug: team.id + '-' + toSlug(team.name),
     },
   })
+}
+
+export function addMemberSubmitUrl(team: Team) {
+  return toRouteUrl(
+    routes,
+    '/org/:org_slug/team/:team_slug/members/add/submit',
+    {
+      params: {
+        org_slug: team.org!.id + '-' + toSlug(team.org!.name),
+        team_slug: team.id + '-' + toSlug(team.name),
+      },
+    },
+  )
 }
 
 export default { routes }
