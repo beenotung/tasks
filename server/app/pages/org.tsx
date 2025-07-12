@@ -143,12 +143,12 @@ let addPage = (
           <label>
             <Locale en="Org Name" zh_hk="組織名稱" zh_cn="组织名称" />
             *:
-            <input name="name" required minlength="3" maxlength="50" />
+            <input name="name" required minlength="1" maxlength="50" />
             <p class="hint">
               <Locale
-                en="(3 to 50 characters)"
-                zh_hk="(3 至 50 個字元)"
-                zh_cn="(3 至 50 个字元)"
+                en="(1 to 50 characters)"
+                zh_hk="(1 至 50 個字元)"
+                zh_cn="(1 至 50 个字元)"
               />
             </p>
           </label>
@@ -177,7 +177,7 @@ function AddPage(attrs: {}, context: DynamicContext) {
 }
 
 let submitParser = object({
-  name: string({ minLength: 3, maxLength: 50 }),
+  name: string({ minLength: 1, maxLength: 50 }),
 })
 
 function Submit(attrs: {}, context: DynamicContext) {
