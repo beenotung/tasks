@@ -12,6 +12,9 @@ import Style from './style.js'
 import { menuIcon } from '../icons/menu.js'
 import { PickLanguage } from './ui-language.js'
 import { getAuthUserRole } from '../auth/user.js'
+import { Locale } from './locale.js'
+import { orgUrl, teamUrl } from '../pages/team.js'
+import { proxy } from '../../../db/proxy.js'
 
 let style = Style(/* css */ `
 .navbar {
@@ -88,6 +91,20 @@ function Navbar(
   let currentUrl = getContextUrl(context)
   let role = getAuthUserRole(context)
   let toggleId = attrs.toggleId || 'navbar-menu-toggle'
+  let menuRoutes = attrs.menuRoutes
+  if (currentUrl.startsWith('/org/')) {
+    let org_id = parseInt(currentUrl.replace('/org/', ''))
+    let org = org_id ? proxy.org[org_id] : null
+    if (org) {
+      menuRoutes = [
+        {
+          menuText: <Locale en="Team List" zh_hk="團隊列表" zh_cn="团队列表" />,
+          url: orgUrl(org),
+        },
+        ...menuRoutes,
+      ]
+    }
+  }
   return (
     <nav class="navbar">
       {style}
@@ -101,7 +118,7 @@ function Navbar(
       </label>
       <input name="navbar-menu-toggle" type="checkbox" id={toggleId} />
       <div class="navbar-menu">
-        {mapArray(attrs.menuRoutes, route =>
+        {mapArray(menuRoutes, route =>
           !isCurrentMenuRouteAllowed(route, role) ? null : (
             <a
               class={flagsToClassName({
