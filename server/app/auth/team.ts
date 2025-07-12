@@ -8,7 +8,7 @@ select
 from team
 left join team_member on team_member.team_id = team.id
 where team.org_id = :org_id
-and (team_member.user_id = :user_id or team.manager_id = :user_id)
+  and (team_member.user_id = :user_id or team.manager_id = :user_id)
 `,
   )
   .pluck()
@@ -21,7 +21,7 @@ select
 from team
 left join team_member on team_member.team_id = team.id
 where team.id = :team_id
-and (team_member.user_id = :user_id or team.manager_id = :user_id)
+  and (team_member.user_id = :user_id or team.manager_id = :user_id)
 `,
   )
   .pluck()

@@ -9,7 +9,7 @@ from org
 left join team on team.org_id = org.id
 left join team_member on team_member.team_id = team.id
 where org.creator_id = :user_id
-or team_member.user_id = :user_id
+   or team_member.user_id = :user_id
 `,
   )
   .pluck()
@@ -23,7 +23,7 @@ from org
 left join team on team.org_id = org.id
 left join team_member on team_member.team_id = team.id
 where org.id = :org_id
-and (team_member.user_id = :user_id or org.creator_id = :user_id)
+  and (team_member.user_id = :user_id or org.creator_id = :user_id)
 `,
   )
   .pluck()
