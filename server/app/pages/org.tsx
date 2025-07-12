@@ -82,17 +82,21 @@ function Main(attrs: {}, context: Context) {
       <ul>
         {mapArray(org_id_list, org_id => {
           let org = proxy.org[org_id]
-          let by =
+          let creator =
             org.creator_id == user_id ? (
-              <Locale en="creator" zh_hk="創建者" zh_cn="创建者" />
+              <Locale en="you" zh_hk="你" zh_cn="你" />
             ) : (
-              <Locale en="by" zh_hk="由" zh_cn="由" /> +
-              ' ' +
-              getDisplayName(org.creator!)
+              ' ' + getDisplayName(org.creator!) + ' '
             )
           return (
             <li>
-              <Link href={orgUrl(org)}>{org.name}</Link> ({by})
+              <Link href={orgUrl(org)}>{org.name}</Link> (
+              <Locale
+                en={<>Created by {creator}</>}
+                zh_hk={<>由{creator}創建</>}
+                zh_cn={<>由{creator}创建</>}
+              />
+              )
             </li>
           )
         })}

@@ -24,7 +24,7 @@ import { Script } from '../components/script.js'
 import { toSlug } from '../format/slug.js'
 import { BackToLink } from '../components/back-to-link.js'
 import { getAuthUser, getAuthUserId } from '../auth/user.js'
-import { is_org_member } from '../auth/org.js'
+import { is_org_member, select_new_member_list_by_team } from '../auth/org.js'
 import { is_team_member, select_team_by_org } from '../auth/team.js'
 import { toRouteUrl } from '../../url.js'
 import { Node } from '../jsx/types.js'
@@ -32,7 +32,7 @@ import { getDisplayName } from './profile.js'
 import { EarlyTerminate } from '../../exception.js'
 import { removeNewlines } from '../format/string.js'
 import { errorRoute } from '../api-route.js'
-import { filter } from 'better-sqlite3-proxy'
+import { filter, find } from 'better-sqlite3-proxy'
 
 let style = Style(/* css */ `
 #Team {
@@ -45,10 +45,13 @@ function OrgPage(
   context: DynamicContext,
 ) {
   let { org, user_id, title } = attrs
+  // TODO only show teams that the user is manager or team member
+  // don't show the team otherwise even if the user is org member
   let team_id_list = select_team_by_org.all({
     org_id: org.id!,
     user_id,
   })
+  let teams = filter(proxy.team, { org_id: org.id! })
   let rename_url = toRouteUrl(routes, '/org/:org_slug/rename', {
     params: {
       org_slug: org.id + '-' + toSlug(org.name),
@@ -109,19 +112,22 @@ function OrgPage(
           <Locale en="Team List" zh_hk="團隊列表" zh_cn="团队列表" />
         </h2>
         <ul>
-          {mapArray(team_id_list, team_id => {
-            let team = proxy.team[team_id]
-            let by =
+          {mapArray(teams, team => {
+            let manager =
               team.manager_id == user_id ? (
-                <Locale en="manager" zh_hk="管理員" zh_cn="管理员" />
+                <Locale en="you" zh_hk="你" zh_cn="你" />
               ) : (
-                <Locale en="by" zh_hk="由" zh_cn="由" /> +
-                ' ' +
-                getDisplayName(team.manager!)
+                ' ' + getDisplayName(team.manager!) + ' '
               )
             return (
               <li>
-                <Link href={teamUrl(team)}>{team.name}</Link> ({by})
+                <Link href={teamUrl(team)}>{team.name}</Link> (
+                <Locale
+                  en={<>Managed by {manager}</>}
+                  zh_hk={<>由{manager}管理</>}
+                  zh_cn={<>由{manager}管理</>}
+                />
+                )
               </li>
             )
           })}
@@ -234,13 +240,18 @@ org_name.textContent = ${JSON.stringify(input.name)}
 function TeamPage(attrs: { team: Team; title: Node }, context: DynamicContext) {
   let { team, title } = attrs
   let org = team.org!
+  let org_id = org.id!
+  let team_id = team.id!
   let rename_url = toRouteUrl(routes, '/org/:org_slug/team/:team_slug/rename', {
     params: {
       org_slug: org.id + '-' + toSlug(org.name),
       team_slug: team.id + '-' + toSlug(team.name),
     },
   })
-  let members = filter(proxy.team_member, { team_id: team.id! })
+  let team_members = filter(proxy.team_member, { team_id })
+  let new_members = select_new_member_list_by_team
+    .all({ org_id, team_id })
+    .map(id => proxy.user[id])
   return (
     <>
       <div id="TeamPage">
@@ -286,7 +297,7 @@ function TeamPage(attrs: { team: Team; title: Node }, context: DynamicContext) {
         <h2>
           <Locale en="Team Members" zh_hk="團隊成員" zh_cn="团队成员" />
         </h2>
-        {members.length === 0 && (
+        {team_members.length === 0 && (
           <p>
             <Locale
               en="No team members"
@@ -296,20 +307,52 @@ function TeamPage(attrs: { team: Team; title: Node }, context: DynamicContext) {
           </p>
         )}
         <ul>
-          {mapArray(members, member => {
+          {mapArray(team_members, member => {
             let user = member.user!
             return <li>{getDisplayName(user)}</li>
           })}
         </ul>
-        <button>
+        <button
+          id="add_member_button"
+          onclick={removeNewlines(`
+            add_member_form.hidden = false;
+            add_member_button.hidden = true;
+            add_member_form.user_id.focus();
+          `)}
+        >
           <Locale en="Add Member" zh_hk="添加成員" zh_cn="添加成员" />
         </button>
         <form
           id="add_member_form"
           method="POST"
           action={addMemberSubmitUrl(team)}
+          hidden
         >
-          <input type="text" name="user_id" />
+          <div>
+            <label>
+              <Locale en="username: " zh_hk="用戶名：" zh_cn="用户名：" />
+              <input type="text" name="username" list="username_list" />
+              <datalist id="username_list">
+                {mapArray(new_members, user => {
+                  let username = user.username
+                  return username ? <option value={username} /> : null
+                })}
+              </datalist>
+            </label>
+            <div>
+              - <Locale en="or" zh_hk="或" zh_cn="或" /> -
+            </div>
+            <label>
+              <Locale en="email: " zh_hk="電郵：" zh_cn="邮箱：" />
+              <input type="text" name="email" list="email_list" />
+              <datalist id="email_list">
+                {mapArray(new_members, user => {
+                  let email = user.email
+                  return email ? <option value={email} /> : null
+                })}
+              </datalist>
+            </label>
+          </div>
           <button type="submit">
             <Locale en="Add" zh_hk="添加" zh_cn="添加" />
           </button>
@@ -567,7 +610,7 @@ function AddTeamSubmit(attrs: {}, context: DynamicContext) {
         zh_hk: '您必須登入才能創建團隊',
         zh_cn: '您必須登入才能创建团队',
       })
-    let org_id = parseInt(context.routerMatch?.params.org_slug)
+    let org_id = parseInt(org_slug)
     let org = proxy.org[org_id]
     let body = getContextFormBody(context)
     let input = addTeamSubmitParser.parse(body)
@@ -626,7 +669,132 @@ function AddTeamSubmitResult(attrs: {}, context: DynamicContext) {
   )
 }
 
-function AddTeamMemberSubmit(attrs: {}, context: DynamicContext) {}
+let addTeamMemberSubmitParser = object({
+  username: string(),
+  email: string(),
+})
+
+function AddTeamMemberSubmit(attrs: {}, context: DynamicContext) {
+  let org_slug = context.routerMatch?.params.org_slug
+  let team_slug = context.routerMatch?.params.team_slug
+  debugger
+  try {
+    let throws = makeThrows(context)
+    let user_id = getAuthUserId(context)!
+    if (!user_id)
+      throws({
+        en: 'You must be logged in to add a member to a team',
+        zh_hk: '您必須登入才能添加團隊成員',
+        zh_cn: '您必须登录才能添加团队成员',
+      })
+    let team_id = parseInt(team_slug)
+    let team = proxy.team[team_id]
+    if (team?.manager_id != user_id)
+      throws({
+        en: 'You are not the manager of this team',
+        zh_hk: '您不是這個團隊的管理員',
+        zh_cn: '您不是这个团队的管理员',
+      })
+    let body = getContextFormBody(context)
+    let input = addTeamMemberSubmitParser.parse(body)
+    function getTargetUser() {
+      let { email, username } = input
+      if (email) {
+        let user = find(proxy.user, { email })
+        if (user) return user
+        let id = proxy.user.push({
+          email,
+          username: null,
+          avatar: null,
+          password_hash: null,
+          is_admin: null,
+          tel: null,
+          nickname: null,
+        })
+        return proxy.user[id]
+      }
+      if (username) {
+        let user = find(proxy.user, { username })
+        if (user) return user
+        let id = proxy.user.push({
+          username,
+          email: null,
+          avatar: null,
+          password_hash: null,
+          is_admin: null,
+          tel: null,
+          nickname: null,
+        })
+        return proxy.user[id]
+      }
+      throws({
+        en: 'You must provide either username or email',
+        zh_hk: '您必須提供用戶名或電郵',
+        zh_cn: '您必须提供用户名或邮箱',
+      })
+    }
+    let target_user = getTargetUser()!
+    let id = proxy.team_member.push({
+      nickname: getDisplayName(target_user),
+      team_id,
+      user_id: target_user.id!,
+    })
+    return (
+      <Redirect
+        href={toRouteUrl(
+          routes,
+          '/org/:org_slug/team/:team_slug/members/add/result',
+          {
+            params: { org_slug, team_slug },
+            query: { id },
+          },
+        )}
+      />
+    )
+  } catch (error) {
+    throwIfInAPI(error, '#add-message', context)
+    return (
+      <Redirect
+        href={toRouteUrl(
+          routes,
+          '/org/:org_slug/team/:team_slug/members/add/result',
+          {
+            params: {
+              org_slug,
+              team_slug,
+            },
+          },
+        )}
+      />
+    )
+  }
+}
+
+function AddTeamMemberSubmitResult(attrs: {}, context: DynamicContext) {
+  let params = new URLSearchParams(context.routerMatch?.search)
+  let error = params.get('error')
+  if (error) {
+    return <div>{renderError(error, context)}</div>
+  }
+  let id = +params.get('id')!
+  let member = proxy.team_member[id]
+  let team = member.team!
+  return (
+    <div>
+      <p>
+        <Locale
+          en={`Your submission is received (#${id}).`}
+          zh_hk={`你的提交已收到 (#${id})。`}
+          zh_cn={`你的提交已收到 (#${id})。`}
+        />
+      </p>
+      <BackToLink
+        href={teamUrl(team)}
+        title={<Locale en="Team Page" zh_hk="團隊頁面" zh_cn="团队页面" />}
+      />
+    </div>
+  )
+}
 
 function resolveOrg(options: {
   title: string
@@ -790,6 +958,12 @@ let routes = {
     title: apiEndpointTitle,
     description: 'add a member to a team',
     node: <AddTeamMemberSubmit />,
+    streaming: false,
+  },
+  '/org/:org_slug/team/:team_slug/members/add/result': {
+    title: apiEndpointTitle,
+    description: 'result of adding a member to a team',
+    node: <AddTeamMemberSubmitResult />,
     streaming: false,
   },
 } satisfies Routes

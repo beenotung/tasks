@@ -25,3 +25,26 @@ where team.id = :team_id
 `,
   )
   .pluck()
+
+export let select_member_by_org = db.prepare(/* sql */ `
+-- team member
+select
+  team_member.user_id
+from team_member
+inner join team on team.id = team_member.team_id
+where team.org_id = :org_id
+
+union
+-- team manager
+select
+  team.manager_id
+from team
+where team.org_id = :org_id
+
+union
+-- org creator
+select
+  org.creator_id
+from org
+where org.id = :org_id
+`)
