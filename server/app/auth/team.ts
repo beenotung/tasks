@@ -12,3 +12,16 @@ and (team_member.user_id = :user_id or team.manager_id = :user_id)
 `,
   )
   .pluck()
+
+export let is_team_member = db
+  .prepare<{ team_id: number; user_id: number }, boolean>(
+    /* sql */ `
+select
+  count(team.id)
+from team
+left join team_member on team_member.team_id = team.id
+where team.id = :team_id
+and (team_member.user_id = :user_id or team.manager_id = :user_id)
+`,
+  )
+  .pluck()

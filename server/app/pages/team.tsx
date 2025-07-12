@@ -1,110 +1,36 @@
 import { o } from '../jsx/jsx.js'
 import { ResolvedPageRoute, Routes } from '../routes.js'
-import { apiEndpointTitle } from '../../config.js'
+import { apiEndpointTitle, title } from '../../config.js'
 import Style from '../components/style.js'
 import {
   Context,
   DynamicContext,
   getContextFormBody,
   throwIfInAPI,
+  WsContext,
 } from '../context.js'
 import { mapArray } from '../components/fragment.js'
 import { object, string } from 'cast.ts'
 import { Link, Redirect } from '../components/router.js'
-import { renderError } from '../components/error.js'
+import { renderError, showError } from '../components/error.js'
 import { Locale, makeThrows, Title } from '../components/locale.js'
 import { Org, proxy, Team } from '../../../db/proxy.js'
-import { env } from '../../env.js'
 import { Script } from '../components/script.js'
 import { toSlug } from '../format/slug.js'
 import { BackToLink } from '../components/back-to-link.js'
 import { getAuthUser, getAuthUserId } from '../auth/user.js'
 import { is_org_member } from '../auth/org.js'
-import { select_team_by_org } from '../auth/team.js'
+import { is_team_member, select_team_by_org } from '../auth/team.js'
 import { toRouteUrl } from '../../url.js'
 import { Node } from '../jsx/types.js'
 import { getDisplayName } from './profile.js'
+import { EarlyTerminate } from '../../exception.js'
 
 let style = Style(/* css */ `
 #Team {
 
 }
 `)
-
-function resolveTeamListPage(context: DynamicContext) {
-  let throws = makeThrows(context)
-
-  let user_id = getAuthUserId(context)!
-  if (!user_id) {
-    return {
-      title: <Locale en="Team List" zh_hk="團隊列表" zh_cn="团队列表" />,
-      description: (
-        <Locale
-          en="List of teams in the org"
-          zh_hk="組織的團隊列表"
-          zh_cn="组织的团队列表"
-        />
-      ),
-      node: (
-        <p>
-          <Locale
-            en={
-              <>
-                You can access the team list after{' '}
-                <Link href="/login">login</Link>.
-              </>
-            }
-            zh_hk={
-              <>
-                您可以在<Link href="/login">登入</Link>後存取團隊列表。
-              </>
-            }
-            zh_cn={
-              <>
-                您可以在<Link href="/login">登入</Link>后存取团队列表。
-              </>
-            }
-          />
-        </p>
-      ),
-    }
-  }
-
-  let org_id = parseInt(context.routerMatch?.params.org_slug)
-  let isMember = is_org_member.get({
-    org_id,
-    user_id,
-  })
-  if (!isMember) {
-    throws({
-      en: 'You are not a member of this org',
-      zh_hk: '您不是這個組織的成員',
-      zh_cn: '您不是这个组织的成员',
-    })
-  }
-
-  let org = proxy.org[org_id]
-  let org_name = org.name
-
-  let title = (
-    <Locale
-      en={`${org_name} - Team List`}
-      zh_hk={`${org_name} - 團隊列表`}
-      zh_cn={`${org_name} - 团队列表`}
-    />
-  )
-  return {
-    title: <Title t={title} />,
-    description: (
-      <Locale
-        en={`List of teams in ${org_name}`}
-        zh_hk={`${org_name} 的團隊列表`}
-        zh_cn={`${org_name} 的团队列表`}
-      />
-    ),
-    node: <TeamListPage org={org} user_id={user_id} title={title} />,
-  }
-}
 
 function TeamListPage(
   attrs: { org: Org; user_id: number; title: Node },
@@ -157,10 +83,175 @@ function TeamListPage(
   )
 }
 
-function resolveTeamPage(context: DynamicContext) {
-  let throws = makeThrows(context)
-  return <></>
+let resolveTeamListPage = resolveOrg({
+  title: <Locale en="Team List" zh_hk="團隊列表" zh_cn="团队列表" />,
+  description: (
+    <Locale
+      en="List of teams in the org"
+      zh_hk="組織的團隊列表"
+      zh_cn="组织的团队列表"
+    />
+  ),
+  action: (
+    <Locale
+      en="access the team list"
+      zh_hk="存取團隊列表"
+      zh_cn="存取团队列表"
+    />
+  ),
+  api: ({ org, user_id }) => {
+    let org_name = org.name
+
+    let title = (
+      <Locale
+        en={`${org_name} - Team List`}
+        zh_hk={`${org_name} - 團隊列表`}
+        zh_cn={`${org_name} - 团队列表`}
+      />
+    )
+    return {
+      title: <Title t={title} />,
+      description: (
+        <Locale
+          en={`List of teams in ${org_name}`}
+          zh_hk={`${org_name} 的團隊列表`}
+          zh_cn={`${org_name} 的团队列表`}
+        />
+      ),
+      node: <TeamListPage org={org} user_id={user_id} title={title} />,
+    }
+  },
+})
+
+let teamPageScript = Script(/* js */ `
+function renameTeam(button) {
+  let url = button.dataset.url
+  emit(url, { name: new_team_name.value })
 }
+`)
+
+function TeamPage(attrs: { team: Team; title: Node }, context: DynamicContext) {
+  let { team, title } = attrs
+  let org = team.org!
+  return (
+    <>
+      {teamPageScript}
+      <div id="TeamPage">
+        <h1>
+          <span>{org.name}</span> - <span id="team_name">{team.name}</span>
+        </h1>
+        <button
+          id="rename_button"
+          onclick="rename_form.hidden = false; rename_button.hidden = true"
+        >
+          <Locale
+            en="Change Team Name"
+            zh_hk="更改團隊名稱"
+            zh_cn="更改团队名称"
+          />
+        </button>
+        <div hidden id="rename_form">
+          <div style="margin-block-end: 0.5rem">
+            <input value={team.name} id="new_team_name" />
+          </div>
+          <button
+            onclick="renameTeam(this)"
+            data-url={toRouteUrl(
+              routes,
+              '/org/:org_slug/team/:team_slug/rename',
+              {
+                params: {
+                  org_slug: team.org!.id + '-' + toSlug(team.org!.name),
+                  team_slug: team.id + '-' + toSlug(team.name),
+                },
+              },
+            )}
+          >
+            <Locale
+              en="Save new team name"
+              zh_hk="保存新的團隊名稱"
+              zh_cn="保存新的团队名称"
+            />
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+let resolveTeamPage = resolveTeam({
+  title: <Locale en="Team" zh_hk="團隊" zh_cn="团队" />,
+  description: (
+    <Locale
+      en="List of team members and tasks"
+      zh_hk="團隊成員和任務列表"
+      zh_cn="团队成员和任务列表"
+    />
+  ),
+  action: (
+    <Locale
+      en="access the team details"
+      zh_hk="存取團隊詳情"
+      zh_cn="存取团队详情"
+    />
+  ),
+  api: ({ team, user_id }) => {
+    let org = team.org!
+    let org_name = org.name
+    let t = `${org_name} - ${team.name}`
+    return {
+      title: title(t),
+      description: (
+        <Locale
+          en={`List of team members and tasks in ${org_name}`}
+          zh_hk={`${org_name} 的團隊成員和任務列表`}
+          zh_cn={`${org_name} 的团队成员和任务列表`}
+        />
+      ),
+      node: <TeamPage team={team} title={t} />,
+    }
+  },
+})
+
+let renameTeamParser = object({
+  name: string({ minLength: 1, maxLength: 50 }),
+})
+
+let resolveRenameTeam = resolveTeam({
+  title: apiEndpointTitle,
+  description: 'change team name by manager',
+  action: (
+    <Locale
+      en="change the team name"
+      zh_hk="更改團隊名稱"
+      zh_cn="更改团队名称"
+    />
+  ),
+  api: ({ team, user_id }, context: Context) => {
+    let ws = (context as WsContext).ws
+    if (team.manager_id != user_id) {
+      ws.send(
+        showError({
+          en: 'You are not the manager of this team',
+          zh_hk: '您不是這個團隊的管理員',
+          zh_cn: '您不是这个团队的管理员',
+        }),
+      )
+    }
+    let body = getContextFormBody(context)
+    let input = renameTeamParser.parse(body)
+    team.name = input.name
+    ws.send([
+      'eval',
+      /* javascript */ `
+rename_form.hidden = true
+rename_button.hidden = false
+team_name.textContent = ${JSON.stringify(input.name)}
+`,
+    ])
+    throw EarlyTerminate
+  },
+})
 
 let addPageStyle = Style(/* css */ `
 #AddTeam .field {
@@ -190,7 +281,11 @@ function resolveAddTeamPage(context: DynamicContext): ResolvedPageRoute {
   let user_id = getAuthUserId(context)!
   if (!user_id) {
     return {
-      title: <Locale en="Create Team" zh_hk="創建團隊" zh_cn="创建团队" />,
+      title: (
+        <Title
+          t={<Locale en="Create Team" zh_hk="創建團隊" zh_cn="创建团队" />}
+        />
+      ),
       description: (
         <Locale
           en="You must be logged in to create a team."
@@ -373,6 +468,135 @@ function SubmitResult(attrs: {}, context: DynamicContext) {
   )
 }
 
+function resolveOrg(options: {
+  title: string
+  description: string
+  /** for error message */
+  action: Node
+  api: (
+    attrs: { org: Org; user_id: number },
+    context: DynamicContext,
+  ) => ResolvedPageRoute
+}) {
+  return function resolve(context: DynamicContext): ResolvedPageRoute {
+    let { title, description, action } = options
+    let user_id = getAuthUserId(context)!
+    if (!user_id) {
+      return {
+        title,
+        description,
+        node: (
+          <p>
+            <Locale
+              en={
+                <>
+                  You can {action} after <Link href="/login">login</Link>.
+                </>
+              }
+              zh_hk={
+                <>
+                  您可以在<Link href="/login">登入</Link>後{action}。
+                </>
+              }
+              zh_cn={
+                <>
+                  您可以在<Link href="/login">登入</Link>后{action}。
+                </>
+              }
+            />
+          </p>
+        ),
+      }
+    }
+    let org_id = parseInt(context.routerMatch?.params.org_slug)
+    let isMember = is_org_member.get({
+      org_id,
+      user_id,
+    })
+    if (!isMember) {
+      return {
+        title,
+        description,
+        node: (
+          <p>
+            <Locale
+              en="You are not a member of this org"
+              zh_hk="您不是這個組織的成員"
+              zh_cn="您不是这个组织的成员"
+            />
+          </p>
+        ),
+      }
+    }
+    let org = proxy.org[org_id]
+    return options.api({ org, user_id }, context)
+  }
+}
+
+function resolveTeam(options: {
+  title: string
+  description: string
+  action: Node
+  api: (
+    attrs: { team: Team; user_id: number },
+    context: DynamicContext,
+  ) => ResolvedPageRoute
+}) {
+  return function resolve(context: DynamicContext): ResolvedPageRoute {
+    let { title, description, action } = options
+    let user_id = getAuthUserId(context)!
+    if (!user_id) {
+      return {
+        title,
+        description,
+        node: (
+          <p>
+            <Locale
+              en={
+                <>
+                  You can {action} after <Link href="/login">login</Link>.
+                </>
+              }
+              zh_hk={
+                <>
+                  您可以在<Link href="/login">登入</Link>後{action}。
+                </>
+              }
+              zh_cn={
+                <>
+                  您可以在<Link href="/login">登入</Link>后{action}。
+                </>
+              }
+            />
+          </p>
+        ),
+      }
+    }
+    let team_id = parseInt(context.routerMatch?.params.team_slug)
+    let isMember = is_team_member.get({
+      team_id,
+      user_id,
+    })
+    if (!isMember) {
+      return {
+        title,
+        description,
+        node: (
+          <p>
+            <Locale
+              en="You are not a member of this team"
+              zh_hk="您不是這個團隊的成員"
+              zh_cn="您不是这个团队的成员"
+            />
+          </p>
+        ),
+      }
+    }
+    let team = proxy.team[team_id]
+    return options.api({ team, user_id }, context)
+  }
+}
+
 let routes = {
   '/org/:org_slug/team': {
     resolve: resolveTeamListPage,
@@ -383,18 +607,21 @@ let routes = {
   },
   '/org/:org_slug/team/add/submit': {
     title: apiEndpointTitle,
-    description: 'TODO',
+    description: 'create a new team under the specified org',
     node: <Submit />,
     streaming: false,
   },
   '/org/:org_slug/team/add/result': {
     title: apiEndpointTitle,
-    description: 'TODO',
+    description: 'result of creating a new team',
     node: <SubmitResult />,
     streaming: false,
   },
   '/org/:org_slug/team/:team_slug': {
     resolve: resolveTeamPage,
+  },
+  '/org/:org_slug/team/:team_slug/rename': {
+    resolve: resolveRenameTeam,
   },
 } satisfies Routes
 
